@@ -1,0 +1,18 @@
+// Define the syntax version of the Protobuf file.
+// "proto3" is used, which is a simpler and more efficient version.
+syntax = "proto3";
+
+// Declare the package for the Protobuf file.
+// In this case, it is named "example."
+package example;
+
+// Define a Protobuf message named "Person" representing a simple person entity.
+message Person {
+  // Field 1: a string representing the person's name.
+  // It is tagged with the unique identifier 1.
+  string name = 1;
+
+  // Field 2: an integer representing the person's ID.
+  // It is tagged with the unique identifier 2.
+  int32 id = 2;
+}
