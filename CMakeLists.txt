@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.23)
 
-# Declare the project with the given name "protobuf_example" and specify the language as C++.
 project(protobuf_example CXX)
 
 add_subdirectory(proto)

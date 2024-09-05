@@ -3,11 +3,8 @@ cmake_minimum_required(VERSION 3.23)
 set(project_name myproto)
 project(myproto LANGUAGES CXX)
 
-# set(PROTO_FILES
-#     example.proto
-# )
 file(GLOB PROTO_FILES "*.proto")
-message("${PROTO_FILES}")
+# message("${PROTO_FILES}")
 add_library(${project_name} ${PROTO_FILES})
 find_package(protobuf CONFIG REQUIRED)
 
