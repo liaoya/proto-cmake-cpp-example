@@ -2,11 +2,6 @@
 
 set -e
 
-THIS_FILE=$(readlink -f "${BASH_SOURCE[0]}")
-THIS_DIR=$(dirname "${THIS_FILE}")
-#shellcheck disable=SC1091
-source "${THIS_DIR}/proxy.sh"
-
 function _check_command() {
     while (($#)); do
         if ! command -v "${1}" 1>/dev/null 2>&1; then
@@ -26,14 +21,16 @@ trap \
     SIGINT ERR EXIT
 _tmp_build_dir=${_tmp_dir}/build
 
-if [[ $# -gt 0 ]] && [[ $1 == "-l" || $1 == "list" ]]; then
-    grep -e "^function _install_" "${THIS_FILE}" | sed -e 's/function _install_//g' -e 's/() {//g' | grep -v _cmake_module | sort
-    exit 0
-fi
-
 if [[ $# -gt 0 ]] && [[ $1 == "-h" || $1 == "--help" || $1 == "help" ]]; then
-    #shellcheck disable=SC2086
-    echo "$(basename ${THIS_FILE}) -c [-h] [-l] program ..."
+    THIS_FILE=$(readlink -f "${BASH_SOURCE[0]}")
+    THIS_FILE=$(basename "${THIS_FILE}")
+    cat <<EOF
+env PROTOBUF_VERSION=v27.3 ./${THIS_FILE}
+
+env PROTOBUF_VERSION=v27.3 ABSEIL_CPP_VERSION=20230802.2 ./${THIS_FILE}
+
+env PS4='+(\${BASH_SOURCE[0]}:\${LINENO}): \${FUNCNAME[0]:+\${FUNCNAME[0]}(): }' PROTOBUF_VERSION=v21.12 bash -x ${THIS_FILE}
+EOF
     exit 0
 fi
 
@@ -117,15 +114,13 @@ function _install_abseil_cpp() {
     local _params
     #shellcheck disable=SC2016
     declare -A _params=([name]=abseil_cpp
-        [download_url]='https://github.com/abseil/abseil-cpp/releases/download/${ABSEIL_CPP_VERSION}/abseil-cpp-${ABSEIL_CPP_VERSION}.tar.gz'
-        [version]=20240722.0
-        [version_url]=https://api.github.com/repos/abseil/abseil-cpp/releases/latest
+        [download_url]="https://github.com/abseil/abseil-cpp/releases/download/${ABSEIL_CPP_VERSION}/abseil-cpp-${ABSEIL_CPP_VERSION}.tar.gz"
         [cmake_opts]="-DABSL_PROPAGATE_CXX_STD=ON"
     )
     _install_github_cmake_module "$(declare -p _params)"
 }
 
-function _remove_abseil() {
+function _remove_abseil_cpp() {
     sudo rm -fr /usr/local/include/absl/
     sudo rm -fr /usr/local/lib/cmake/absl/
     sudo rm -fr /usr/local/lib/libabsl_*
@@ -136,11 +131,13 @@ function _install_protobuf() {
     local _params
     #shellcheck disable=SC2016
     declare -A _params=([name]=protobuf
-        [download_url]='https://github.com/protocolbuffers/protobuf/archive/refs/tags/${PROTOBUF_VERSION}.tar.gz'
-        [version]=v27.3
-        [version_url]=https://api.github.com/repos/protocolbuffers/protobuf/releases/latest
-        [cmake_opts]="-Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_ABSL_PROVIDER=package"
+        [download_url]="https://github.com/protocolbuffers/protobuf/archive/refs/tags/${PROTOBUF_VERSION}.tar.gz"
     )
+    if [[ ${PROTOBUF_NUM_VERSION} -gt 2112 ]]; then
+        _params[cmake_opts]="-Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_ABSL_PROVIDER=package"
+    else
+        _params[cmake_opts]="-Dprotobuf_BUILD_TESTS=OFF"
+    fi
     _install_github_cmake_module "$(declare -p _params)"
 }
 
@@ -163,26 +160,14 @@ function _remove_protobuf() {
     sudo rm -fr /usr/local/lib/pkgconfig/protobuf*.pc
 }
 
-function _install_all() {
-    grep -e '^function _remove_[[:alnum:]]*' "${THIS_FILE}" | sed "s/() {//g" | sed "s/function //g" | sort | while IFS= read -r remove_func; do
-        "${remove_func}"
-    done
-    grep -e '^function _install_[[:alnum:]]*' "${THIS_FILE}" | sed "s/() {//g" | sed "s/function //g" | grep -v "_install_all" | grep -v "_install_github_cmake_module" | sort | while IFS= read -r install_func; do
-        "${install_func}"
-    done
-}
+PROTOBUF_VERSION=${PROTOBUF_VERSION:-v27.3}
+ABSEIL_CPP_VERSION=${ABSEIL_CPP_VERSION:-20240722.0}
 
-while (($#)); do
-    name=${1//-/_}
-    shift
-    if grep -s -q -e "^function _install_${name}()" "${THIS_FILE}"; then
-        if grep -s -q -e "^function _remove_${name}()" "${THIS_FILE}"; then
-            "_remove_${name}"
-        fi
-        "_install_${name}"
-    else
-        echo "Can't find '_install_${name}' in '${THIS_FILE}'"
-        exit 1
-    fi
-done
-
+PROTOBUF_NUM_VERSION=$(echo "${PROTOBUF_VERSION:1} * 100 / 1" | bc)
+export PROTOBUF_NUM_VERSION
+if [[ ${PROTOBUF_NUM_VERSION} -gt 2112 ]]; then
+    _remove_abseil_cpp
+    _install_abseil_cpp
+fi
+_remove_protobuf
+_install_protobuf
